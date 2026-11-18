@@ -59,7 +59,7 @@
 
   <script>
     let codeReader = null;
-    let selectedDeviceId = null;
+    let isScanning = false;
     let cart = [];
 
     // Danh mục sản phẩm mẫu (Mock Database)
@@ -70,45 +70,44 @@
       "8934561000010": { name: "Bánh Chocopie Orion 66g", price: 12000 }
     };
 
-    async function initScanner() {
-      codeReader = new ZXing.BrowserMultiFormatReader();
-      const videoDevices = await codeReader.listVideoInputDevices();
-      
-      // Ưu tiên chọn Camera sau trên điện thoại
-      const backCam = videoDevices.find(device => 
-        device.label.toLowerCase().includes('back') || 
-        device.label.toLowerCase().includes('rear') ||
-        device.label.toLowerCase().includes('environment')
-      );
-      
-      selectedDeviceId = backCam ? backCam.deviceId : (videoDevices[0] ? videoDevices[0].deviceId : null);
-    }
-
     async function startScan() {
-      if (!codeReader) await initScanner();
-      if (!selectedDeviceId) {
-        alert("Không tìm thấy camera trên thiết bị!");
-        return;
+      if (isScanning) return;
+
+      try {
+        document.getElementById('scan-status').innerText = "Đang yêu cầu quyền camera...";
+        codeReader = new ZXing.BrowserMultiFormatReader();
+
+        // Cấu hình ưu tiên Camera sau trên điện thoại
+        const constraints = {
+          video: { facingMode: "environment" }
+        };
+
+        document.getElementById('start-btn').classList.add('hidden');
+        document.getElementById('stop-btn').classList.remove('hidden');
+        document.getElementById('scan-status').innerText = "Đang quét...";
+        isScanning = true;
+
+        // Kích hoạt luồng quét
+        codeReader.decodeFromConstraints(constraints, 'video', (result, error) => {
+          if (result) {
+            const barcode = result.getText();
+            document.getElementById('result-code').innerText = barcode;
+            addProductToCart(barcode);
+            playBeepSound();
+          }
+        });
+
+      } catch (err) {
+        console.error(err);
+        alert("Không thể mở Camera. Hãy chắc chắn bạn mở web bằng Chrome/Safari và chọn Allow khi trình duyệt xin quyền!");
+        stopScan();
       }
-
-      document.getElementById('scan-status').innerText = "Đang quét...";
-      document.getElementById('start-btn').classList.add('hidden');
-      document.getElementById('stop-btn').classList.remove('hidden');
-
-      // Bắt đầu đọc luồng video từ Camera
-      codeReader.decodeFromVideoDevice(selectedDeviceId, 'video', (result, error) => {
-        if (result) {
-          const barcode = result.getText();
-          document.getElementById('result-code').innerText = barcode;
-          addProductToCart(barcode);
-          playBeepSound();
-        }
-      });
     }
 
     function stopScan() {
       if (codeReader) {
         codeReader.reset();
+        isScanning = false;
         document.getElementById('scan-status').innerText = "Đã dừng camera";
         document.getElementById('start-btn').classList.remove('hidden');
         document.getElementById('stop-btn').classList.add('hidden');
@@ -152,7 +151,7 @@
       renderCart();
     }
 
-    // Tiếng Beep phản hồi khi nhận diện mã thành công
+    // Tiếng Beep phản hồi khi nhận diện thành công
     function playBeepSound() {
       const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       const osc = audioCtx.createOscillator();
