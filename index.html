@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tạp Hóa Barcode Scanner - ZXing</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- ZXing JS Library CDN -->
+  <script type="text/javascript" src="https://unpkg.com/@zxing/library@latest"></script>
+</head>
+<body class="bg-gray-100 p-4 font-sans max-w-md mx-auto min-h-screen">
+
+  <header class="mb-4 text-center">
+    <h1 class="text-xl font-bold text-blue-600">🛒 Tạp Hóa Web Scanner</h1>
+    <p class="text-xs text-gray-500">Quét Barcode / QR Code trực tiếp qua Camera</p>
+  </header>
+
+  <!-- Khung Viewport Camera -->
+  <div class="bg-black rounded-xl overflow-hidden relative mb-4 shadow-lg h-56 flex items-center justify-center">
+    <video id="video" class="w-full h-full object-cover"></video>
+    <div id="scan-status" class="absolute bottom-2 left-2 bg-black/70 text-white text-xs px-2.5 py-1 rounded-full">
+      Chưa bật camera
+    </div>
+  </div>
+
+  <!-- Nút điều khiển -->
+  <div class="flex gap-2 mb-4">
+    <button id="start-btn" onclick="startScan()" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-lg font-semibold text-sm transition">
+      📷 Bật Camera Quét
+    </button>
+    <button id="stop-btn" onclick="stopScan()" class="flex-1 bg-red-500 hover:bg-red-600 text-white py-2.5 rounded-lg font-semibold text-sm transition hidden">
+      ⏹ Dừng Camera
+    </button>
+  </div>
+
+  <!-- Hiển thị mã vừa quét -->
+  <div class="bg-white p-3 rounded-lg shadow-sm border mb-4">
+    <span class="text-xs text-gray-400 font-medium block uppercase tracking-wider">Mã Barcode vừa quét:</span>
+    <span id="result-code" class="font-mono text-base font-bold text-gray-800 break-all">---</span>
+  </div>
+
+  <!-- Giỏ hàng / Đơn hàng tạp hóa -->
+  <div class="bg-white p-4 rounded-lg shadow-sm border">
+    <div class="flex justify-between items-center mb-3">
+      <h2 class="font-bold text-gray-700">Danh Sách Đơn Hàng</h2>
+      <button onclick="clearCart()" class="text-xs text-red-500 hover:underline">Xóa danh sách</button>
+    </div>
+
+    <ul id="cart-list" class="divide-y text-sm max-h-48 overflow-y-auto mb-3">
+      <li class="py-3 text-gray-400 text-center italic">Chưa quét sản phẩm nào</li>
+    </ul>
+
+    <div class="pt-3 border-t flex justify-between items-center font-bold text-base">
+      <span>Tổng tiền:</span>
+      <span id="total-price" class="text-blue-600">0 VNĐ</span>
+    </div>
+  </div>
+
+  <script>
+    let codeReader = null;
+    let selectedDeviceId = null;
+    let cart = [];
+
+    // Danh mục sản phẩm mẫu (Mock Database)
+    const mockProducts = {
+      "8934563138164": { name: "Mì Hảo Hảo Tôm Chua Cay", price: 4500 },
+      "8934564010018": { name: "Coca Cola 320ml", price: 10000 },
+      "8934822200114": { name: "Sữa Tươi Vinamilk 220ml", price: 8500 },
+      "8934561000010": { name: "Bánh Chocopie Orion 66g", price: 12000 }
+    };
+
+    async function initScanner() {
+      codeReader = new ZXing.BrowserMultiFormatReader();
+      const videoDevices = await codeReader.listVideoInputDevices();
+      
+      // Ưu tiên chọn Camera sau trên điện thoại
+      const backCam = videoDevices.find(device => 
+        device.label.toLowerCase().includes('back') || 
+        device.label.toLowerCase().includes('rear') ||
+        device.label.toLowerCase().includes('environment')
+      );
+      
+      selectedDeviceId = backCam ? backCam.deviceId : (videoDevices[0] ? videoDevices[0].deviceId : null);
+    }
+
+    async function startScan() {
+      if (!codeReader) await initScanner();
+      if (!selectedDeviceId) {
+        alert("Không tìm thấy camera trên thiết bị!");
+        return;
+      }
+
+      document.getElementById('scan-status').innerText = "Đang quét...";
+      document.getElementById('start-btn').classList.add('hidden');
+      document.getElementById('stop-btn').classList.remove('hidden');
+
+      // Bắt đầu đọc luồng video từ Camera
+      codeReader.decodeFromVideoDevice(selectedDeviceId, 'video', (result, error) => {
+        if (result) {
+          const barcode = result.getText();
+          document.getElementById('result-code').innerText = barcode;
+          addProductToCart(barcode);
+          playBeepSound();
+        }
+      });
+    }
+
+    function stopScan() {
+      if (codeReader) {
+        codeReader.reset();
+        document.getElementById('scan-status').innerText = "Đã dừng camera";
+        document.getElementById('start-btn').classList.remove('hidden');
+        document.getElementById('stop-btn').classList.add('hidden');
+      }
+    }
+
+    function addProductToCart(barcode) {
+      const item = mockProducts[barcode] || { 
+        name: `Mã chưa đăng ký (${barcode})`, 
+        price: 0 
+      };
+      cart.push(item);
+      renderCart();
+    }
+
+    function renderCart() {
+      const cartList = document.getElementById('cart-list');
+      let total = 0;
+
+      if (cart.length === 0) {
+        cartList.innerHTML = '<li class="py-3 text-gray-400 text-center italic">Chưa quét sản phẩm nào</li>';
+        document.getElementById('total-price').innerText = '0 VNĐ';
+        return;
+      }
+
+      cartList.innerHTML = cart.map((item, index) => {
+        total += item.price;
+        return `
+          <li class="py-2 flex justify-between items-center">
+            <span class="truncate pr-2">${index + 1}. ${item.name}</span>
+            <span class="font-semibold text-gray-700 font-mono">${item.price.toLocaleString('vi-VN')}đ</span>
+          </li>
+        `;
+      }).join('');
+
+      document.getElementById('total-price').innerText = `${total.toLocaleString('vi-VN')} VNĐ`;
+    }
+
+    function clearCart() {
+      cart = [];
+      renderCart();
+    }
+
+    // Tiếng Beep phản hồi khi nhận diện mã thành công
+    function playBeepSound() {
+      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.type = "sine";
+      osc.frequency.value = 1000;
+      gain.gain.value = 0.1;
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.08);
+    }
+  </script>
+</body>
+</html>
