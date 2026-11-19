@@ -3,57 +3,116 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tạp Hóa Barcode Scanner - ZXing</title>
+  <title>Tạp Hóa Barcode Scanner - ZXing Pro</title>
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- ZXing JS Library CDN -->
+  <!-- ZXing JS Library CDN (Giữ nguyên thư viện theo yêu cầu) -->
   <script type="text/javascript" src="https://unpkg.com/@zxing/library@latest"></script>
+  <style>
+    /* Hiệu ứng vạch quét Laser */
+    @keyframes scan {
+      0% { top: 10%; }
+      50% { top: 85%; }
+      100% { top: 10%; }
+    }
+    .laser-line {
+      position: absolute;
+      left: 5%;
+      width: 90%;
+      height: 2px;
+      background-color: #ef4444;
+      box-shadow: 0 0 8px #ef4444;
+      animation: scan 2s infinite ease-in-out;
+    }
+  </style>
 </head>
-<body class="bg-gray-100 p-4 font-sans max-w-md mx-auto min-h-screen">
+<body class="bg-gray-100 p-4 font-sans max-w-md mx-auto min-h-screen pb-10">
 
   <header class="mb-4 text-center">
-    <h1 class="text-xl font-bold text-blue-600">🛒 Tạp Hóa Web Scanner</h1>
-    <p class="text-xs text-gray-500">Quét Barcode / QR Code trực tiếp qua Camera</p>
+    <h1 class="text-xl font-bold text-blue-600 flex items-center justify-center gap-2">
+      🛒 Tạp Hóa Web Scanner Pro
+    </h1>
+    <p class="text-xs text-gray-500">Tối ưu quét mã vạch & Quản lý đơn hàng</p>
   </header>
 
   <!-- Khung Viewport Camera -->
-  <div class="bg-black rounded-xl overflow-hidden relative mb-4 shadow-lg h-56 flex items-center justify-center">
+  <div class="bg-black rounded-xl overflow-hidden relative mb-4 shadow-lg h-60 flex items-center justify-center border-2 border-blue-500/30">
     <video id="video" class="w-full h-full object-cover"></video>
-    <div id="scan-status" class="absolute bottom-2 left-2 bg-black/70 text-white text-xs px-2.5 py-1 rounded-full">
-      Chưa bật camera
+    
+    <!-- Khung ngắm & vạch laser -->
+    <div id="scanner-overlay" class="absolute inset-0 pointer-events-none hidden">
+      <div class="w-full h-full border-2 border-dashed border-white/40 rounded-xl relative">
+        <div class="laser-line"></div>
+      </div>
+    </div>
+
+    <!-- Trạng thái -->
+    <div id="scan-status" class="absolute bottom-2 left-2 bg-black/75 text-white text-xs px-3 py-1 rounded-full backdrop-blur-sm z-10">
+      🔴 Chưa bật camera
     </div>
   </div>
 
   <!-- Nút điều khiển -->
   <div class="flex gap-2 mb-4">
-    <button id="start-btn" onclick="startScan()" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-lg font-semibold text-sm transition">
+    <button id="start-btn" onclick="startScan()" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-lg font-semibold text-sm transition shadow">
       📷 Bật Camera Quét
     </button>
-    <button id="stop-btn" onclick="stopScan()" class="flex-1 bg-red-500 hover:bg-red-600 text-white py-2.5 rounded-lg font-semibold text-sm transition hidden">
+    <button id="stop-btn" onclick="stopScan()" class="flex-1 bg-red-500 hover:bg-red-600 text-white py-2.5 rounded-lg font-semibold text-sm transition shadow hidden">
       ⏹ Dừng Camera
     </button>
   </div>
 
   <!-- Hiển thị mã vừa quét -->
-  <div class="bg-white p-3 rounded-lg shadow-sm border mb-4">
-    <span class="text-xs text-gray-400 font-medium block uppercase tracking-wider">Mã Barcode vừa quét:</span>
-    <span id="result-code" class="font-mono text-base font-bold text-gray-800 break-all">---</span>
+  <div class="bg-white p-3 rounded-lg shadow-sm border mb-4 flex justify-between items-center">
+    <div>
+      <span class="text-[10px] text-gray-400 font-medium block uppercase tracking-wider">Mã Barcode vừa quét:</span>
+      <span id="result-code" class="font-mono text-base font-bold text-blue-600 break-all">---</span>
+    </div>
+    <span id="scan-badge" class="hidden text-xs bg-green-100 text-green-700 font-semibold px-2 py-0.5 rounded-full">Đã nhận mã</span>
   </div>
 
   <!-- Giỏ hàng / Đơn hàng tạp hóa -->
-  <div class="bg-white p-4 rounded-lg shadow-sm border">
+  <div class="bg-white p-4 rounded-lg shadow-sm border mb-4">
     <div class="flex justify-between items-center mb-3">
-      <h2 class="font-bold text-gray-700">Danh Sách Đơn Hàng</h2>
-      <button onclick="clearCart()" class="text-xs text-red-500 hover:underline">Xóa danh sách</button>
+      <h2 class="font-bold text-gray-800 text-sm uppercase tracking-wide">Danh Sách Đơn Hàng</h2>
+      <button onclick="clearCart()" class="text-xs text-red-500 hover:underline font-medium">Xóa đơn</button>
     </div>
 
-    <ul id="cart-list" class="divide-y text-sm max-h-48 overflow-y-auto mb-3">
-      <li class="py-3 text-gray-400 text-center italic">Chưa quét sản phẩm nào</li>
+    <ul id="cart-list" class="divide-y text-sm max-h-56 overflow-y-auto mb-3">
+      <li class="py-4 text-gray-400 text-center italic">Chưa quét sản phẩm nào</li>
     </ul>
 
     <div class="pt-3 border-t flex justify-between items-center font-bold text-base">
       <span>Tổng tiền:</span>
-      <span id="total-price" class="text-blue-600">0 VNĐ</span>
+      <span id="total-price" class="text-blue-600 text-lg">0 VNĐ</span>
+    </div>
+
+    <button onclick="checkout()" class="w-full mt-3 bg-emerald-600 hover:bg-emerald-700 text-white py-2.5 rounded-lg font-semibold text-sm transition shadow">
+      ✅ Thanh Toán & In Hóa Đơn
+    </button>
+  </div>
+
+  <!-- Modal Thêm Sản Phẩm Mới -->
+  <div id="add-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+    <div class="bg-white rounded-xl p-5 w-full max-w-sm shadow-xl">
+      <h3 class="font-bold text-lg text-gray-800 mb-1">Mã sản phẩm mới</h3>
+      <p class="text-xs text-gray-500 mb-3">Mã: <span id="modal-barcode" class="font-mono font-bold text-blue-600"></span></p>
+      
+      <div class="space-y-3">
+        <div>
+          <label class="block text-xs font-semibold text-gray-600 mb-1">Tên sản phẩm:</label>
+          <input type="text" id="new-name" placeholder="VD: Bánh mì ngọt" class="w-full border rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-600 mb-1">Đơn giá (VNĐ):</label>
+          <input type="number" id="new-price" placeholder="VD: 15000" class="w-full border rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+        </div>
+      </div>
+
+      <div class="flex gap-2 mt-4">
+        <button onclick="saveNewProduct()" class="flex-1 bg-blue-600 text-white py-2 rounded-lg text-sm font-semibold hover:bg-blue-700">Lưu & Thêm</button>
+        <button onclick="closeModal()" class="flex-1 bg-gray-200 text-gray-700 py-2 rounded-lg text-sm font-semibold hover:bg-gray-300">Hủy</button>
+      </div>
     </div>
   </div>
 
@@ -61,45 +120,70 @@
     let codeReader = null;
     let isScanning = false;
     let cart = [];
+    
+    // Logic chống quét trùng lập liên tục
+    let lastCode = "";
+    let lastScanTime = 0;
+    const COOLDOWN_MS = 1500; // Thời gian chờ 1.5 giây giữa các lần quét cùng mã
 
-    // Danh mục sản phẩm mẫu (Mock Database)
-    const mockProducts = {
+    // Danh mục mẫu + Tự động khôi phục từ localStorage
+    const defaultProducts = {
       "8934563138164": { name: "Mì Hảo Hảo Tôm Chua Cay", price: 4500 },
       "8934564010018": { name: "Coca Cola 320ml", price: 10000 },
       "8934822200114": { name: "Sữa Tươi Vinamilk 220ml", price: 8500 },
       "8934561000010": { name: "Bánh Chocopie Orion 66g", price: 12000 }
     };
 
+    let products = JSON.parse(localStorage.getItem('taphoa_db')) || defaultProducts;
+    let pendingBarcode = "";
+
+    function saveProductsToStorage() {
+      localStorage.setItem('taphoa_db', JSON.stringify(products));
+    }
+
     async function startScan() {
       if (isScanning) return;
 
       try {
-        document.getElementById('scan-status').innerText = "Đang yêu cầu quyền camera...";
+        document.getElementById('scan-status').innerText = "⏳ Đang kết nối Camera...";
         codeReader = new ZXing.BrowserMultiFormatReader();
 
-        // Cấu hình ưu tiên Camera sau trên điện thoại
-        const constraints = {
-          video: { facingMode: "environment" }
-        };
+        const constraints = { video: { facingMode: "environment" } };
 
         document.getElementById('start-btn').classList.add('hidden');
         document.getElementById('stop-btn').classList.remove('hidden');
-        document.getElementById('scan-status').innerText = "Đang quét...";
+        document.getElementById('scanner-overlay').classList.remove('hidden');
+        document.getElementById('scan-status').innerText = "🟢 Đang quét mã...";
         isScanning = true;
 
-        // Kích hoạt luồng quét
         codeReader.decodeFromConstraints(constraints, 'video', (result, error) => {
           if (result) {
             const barcode = result.getText();
+            const now = Date.now();
+
+            // Bỏ qua nếu quét lặp mã trong khoảng thời gian Cooldown
+            if (barcode === lastCode && (now - lastScanTime < COOLDOWN_MS)) {
+              return;
+            }
+
+            lastCode = barcode;
+            lastScanTime = now;
+
             document.getElementById('result-code').innerText = barcode;
-            addProductToCart(barcode);
-            playBeepSound();
+            
+            // Hiệu ứng thông báo nhận mã
+            const badge = document.getElementById('scan-badge');
+            badge.classList.remove('hidden');
+            setTimeout(() => badge.classList.add('hidden'), 1000);
+
+            processBarcode(barcode);
+            playBeepAndVibrate();
           }
         });
 
       } catch (err) {
         console.error(err);
-        alert("Không thể mở Camera. Hãy chắc chắn bạn mở web bằng Chrome/Safari và chọn Allow khi trình duyệt xin quyền!");
+        alert("Không thể truy cập camera. Vui lòng cấp quyền sử dụng camera trong trình duyệt!");
         stopScan();
       }
     }
@@ -108,18 +192,66 @@
       if (codeReader) {
         codeReader.reset();
         isScanning = false;
-        document.getElementById('scan-status').innerText = "Đã dừng camera";
+        document.getElementById('scan-status').innerText = "🔴 Đã dừng camera";
+        document.getElementById('scanner-overlay').classList.add('hidden');
         document.getElementById('start-btn').classList.remove('hidden');
         document.getElementById('stop-btn').classList.add('hidden');
       }
     }
 
-    function addProductToCart(barcode) {
-      const item = mockProducts[barcode] || { 
-        name: `Mã chưa đăng ký (${barcode})`, 
-        price: 0 
-      };
-      cart.push(item);
+    function processBarcode(barcode) {
+      if (products[barcode]) {
+        addToCart(barcode, products[barcode].name, products[barcode].price);
+      } else {
+        // Mở Modal nhập sản phẩm mới
+        pendingBarcode = barcode;
+        document.getElementById('modal-barcode').innerText = barcode;
+        document.getElementById('new-name').value = "";
+        document.getElementById('new-price').value = "";
+        document.getElementById('add-modal').classList.remove('hidden');
+      }
+    }
+
+    function saveNewProduct() {
+      const name = document.getElementById('new-name').value.trim();
+      const price = parseInt(document.getElementById('new-price').value);
+
+      if (!name || isNaN(price) || price < 0) {
+        alert("Vui lòng nhập tên và giá hợp lệ!");
+        return;
+      }
+
+      // Lưu vào danh mục & Giỏ hàng
+      products[pendingBarcode] = { name, price };
+      saveProductsToStorage();
+      addToCart(pendingBarcode, name, price);
+      closeModal();
+    }
+
+    function closeModal() {
+      document.getElementById('add-modal').classList.add('hidden');
+    }
+
+    function addToCart(barcode, name, price) {
+      const existingItem = cart.find(item => item.barcode === barcode);
+      if (existingItem) {
+        existingItem.qty += 1;
+      } else {
+        cart.push({ barcode, name, price, qty: 1 });
+      }
+      renderCart();
+    }
+
+    function updateQty(index, delta) {
+      cart[index].qty += delta;
+      if (cart[index].qty <= 0) {
+        cart.splice(index, 1);
+      }
+      renderCart();
+    }
+
+    function removeItem(index) {
+      cart.splice(index, 1);
       renderCart();
     }
 
@@ -128,17 +260,29 @@
       let total = 0;
 
       if (cart.length === 0) {
-        cartList.innerHTML = '<li class="py-3 text-gray-400 text-center italic">Chưa quét sản phẩm nào</li>';
+        cartList.innerHTML = '<li class="py-4 text-gray-400 text-center italic">Chưa quét sản phẩm nào</li>';
         document.getElementById('total-price').innerText = '0 VNĐ';
         return;
       }
 
       cartList.innerHTML = cart.map((item, index) => {
-        total += item.price;
+        const itemTotal = item.price * item.qty;
+        total += itemTotal;
         return `
-          <li class="py-2 flex justify-between items-center">
-            <span class="truncate pr-2">${index + 1}. ${item.name}</span>
-            <span class="font-semibold text-gray-700 font-mono">${item.price.toLocaleString('vi-VN')}đ</span>
+          <li class="py-2.5 flex justify-between items-center">
+            <div class="flex-1 pr-2 overflow-hidden">
+              <div class="font-medium text-gray-800 truncate">${item.name}</div>
+              <div class="text-xs text-gray-400 font-mono">${item.price.toLocaleString('vi-VN')}đ</div>
+            </div>
+            <div class="flex items-center gap-2">
+              <div class="flex items-center border rounded-lg bg-gray-50">
+                <button onclick="updateQty(${index}, -1)" class="px-2 py-0.5 text-gray-600 hover:bg-gray-200 font-bold rounded-l">-</button>
+                <span class="px-2 font-semibold text-xs text-gray-800">${item.qty}</span>
+                <button onclick="updateQty(${index}, 1)" class="px-2 py-0.5 text-gray-600 hover:bg-gray-200 font-bold rounded-r">+</button>
+              </div>
+              <span class="font-bold text-gray-800 font-mono min-w-[70px] text-right">${itemTotal.toLocaleString('vi-VN')}đ</span>
+              <button onclick="removeItem(${index})" class="text-red-400 hover:text-red-600 ml-1 font-bold text-xs">✕</button>
+            </div>
           </li>
         `;
       }).join('');
@@ -147,22 +291,42 @@
     }
 
     function clearCart() {
+      if (cart.length === 0) return;
+      if (confirm("Bạn có chắc muốn xóa toàn bộ đơn hàng hiện tại?")) {
+        cart = [];
+        renderCart();
+      }
+    }
+
+    function checkout() {
+      if (cart.length === 0) {
+        alert("Giỏ hàng đang trống!");
+        return;
+      }
+      alert(`Thanh toán thành công!\nTổng hóa đơn: ${document.getElementById('total-price').innerText}`);
       cart = [];
       renderCart();
     }
 
-    // Tiếng Beep phản hồi khi nhận diện thành công
-    function playBeepSound() {
-      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
-      osc.connect(gain);
-      gain.connect(audioCtx.destination);
-      osc.type = "sine";
-      osc.frequency.value = 1000;
-      gain.gain.value = 0.1;
-      osc.start();
-      osc.stop(audioCtx.currentTime + 0.08);
+    // Âm thanh Beep + Rung điện thoại khi nhận mã thành công
+    function playBeepAndVibrate() {
+      if (navigator.vibrate) {
+        navigator.vibrate(100); // Rung 100ms
+      }
+      try {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.type = "sine";
+        osc.frequency.value = 1200;
+        gain.gain.value = 0.15;
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.1);
+      } catch (e) {
+        console.log("Audio not allowed yet");
+      }
     }
   </script>
 </body>
